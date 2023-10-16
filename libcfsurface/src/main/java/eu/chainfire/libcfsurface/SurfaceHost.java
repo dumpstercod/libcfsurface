@@ -122,11 +122,11 @@ public abstract class SurfaceHost {
             cSurfaceControl = Class.forName("android.view.SurfaceControl");
 
             IBinder mBuiltInDisplay = null;
-            try {
+            //try {
                 // API 28-
-                Method mGetBuiltInDisplay = cSurfaceControl.getDeclaredMethod("getBuiltInDisplay", int.class);
-                mBuiltInDisplay = (IBinder)mGetBuiltInDisplay.invoke(null,0 /* SurfaceControl.BUILT_IN_DISPLAY_ID_MAIN */);
-            } catch (NoSuchMethodException e) {
+            //    Method mGetBuiltInDisplay = cSurfaceControl.getDeclaredMethod("getBuiltInDisplay", int.class);
+            //    mBuiltInDisplay = (IBinder)mGetBuiltInDisplay.invoke(null,0 /* SurfaceControl.BUILT_IN_DISPLAY_ID_MAIN */);
+            /*} catch (NoSuchMethodException e) {
             }
             if (mBuiltInDisplay == null) {
                 try {
@@ -146,9 +146,9 @@ public abstract class SurfaceHost {
                 Method mGetDisplayIds = cDisplayManagerGlobal.getMethod("getDisplayIds");
                 int[] ids = (int[])mGetDisplayIds.invoke(oDisplayManagerGlobal);
                 displayId = ids[0];
-            }
+            }*/
 
-            Method mGetDisplayConfigs;
+            /*Method mGetDisplayConfigs;
             Object[] displayConfigs;
             if (Build.VERSION.SDK_INT <= 30) {
                 // API 30-
@@ -168,9 +168,9 @@ public abstract class SurfaceHost {
                 Class<?> cDisplayInfo = Class.forName("android.view.DisplayInfo");
                 Field fSupportedModes = cDisplayInfo.getDeclaredField("supportedModes");
                 displayConfigs = (Object[]) fSupportedModes.get(oDisplayInfo);
-            }
+            }*/
 
-            Class<?> cPhysicalDisplayInfo = null;
+            /*Class<?> cPhysicalDisplayInfo = null;
             // API 29-
             try {
                 cPhysicalDisplayInfo = Class.forName("android.view.SurfaceControl$PhysicalDisplayInfo");
@@ -192,9 +192,9 @@ public abstract class SurfaceHost {
             } else {
                 // API 34+
                 cPhysicalDisplayInfo = Class.forName("android.view.Display$Mode");
-            }
+            }*/
 
-            Field fWidth;
+            /*Field fWidth;
             Field fHeight;
 
             try {
@@ -211,7 +211,13 @@ public abstract class SurfaceHost {
                 throw new RuntimeException("CFSurface: could not determine screen dimensions");
             }
             mWidth = fWidth.getInt(displayConfigs[0]);
-            mHeight = fHeight.getInt(displayConfigs[0]);
+            mHeight = fHeight.getInt(displayConfigs[0]);*/
+            /*
+                TODO: Replace these hard-coded dimensions with proper logic for determining screen dimensions at boot time.
+                      The code commented out above this should help serve as a starting point.
+             */
+            mWidth = 1440;
+            mHeight = 3120;
             checkRotation();
 
             // Create SurfaceControl
