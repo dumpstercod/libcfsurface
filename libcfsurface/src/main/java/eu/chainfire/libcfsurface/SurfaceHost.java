@@ -29,6 +29,7 @@ import android.opengl.GLES20;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.SystemClock;
+import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.Display;
 import android.view.Surface;
@@ -57,6 +58,7 @@ public abstract class SurfaceHost {
 
     private Object mSurfaceSession = null;
     private Class<?> cSurfaceControl = null;
+    private Class<?> cDisplayManagerGlobal = null;
     private Object mSurfaceControl = null;
     private Method mSurfaceControlOpenTransaction = null;
     private Method mSurfaceControlCloseTransaction = null;
@@ -70,6 +72,8 @@ public abstract class SurfaceHost {
     private Method mTransactionHide;
     private Method mTransactionSetLayer;
     private Method mTransactionSetBufferSize;
+    private Object oDisplayManagerGlobal;
+    private int displayId;
 
     private final boolean checkRotation() {
         // This is fairly weird construct only because we need to handle the case of (for example)
@@ -125,11 +129,23 @@ public abstract class SurfaceHost {
             } catch (NoSuchMethodException e) {
             }
             if (mBuiltInDisplay == null) {
-                // API 29+
-                Method mGetPhysicalDisplayIds = cSurfaceControl.getDeclaredMethod("getPhysicalDisplayIds");
-                long[] ids = (long[])mGetPhysicalDisplayIds.invoke(null);
-                Method mGetPhysicalDisplayToken = cSurfaceControl.getDeclaredMethod("getPhysicalDisplayToken", long.class);
-                mBuiltInDisplay = (IBinder)mGetPhysicalDisplayToken.invoke(null, ids[0]);
+                try {
+                    // API 29-33
+                    Method mGetPhysicalDisplayIds = cSurfaceControl.getDeclaredMethod("getPhysicalDisplayIds");
+                    long[] ids = (long[])mGetPhysicalDisplayIds.invoke(null);
+                    Method mGetPhysicalDisplayToken = cSurfaceControl.getDeclaredMethod("getPhysicalDisplayToken", long.class);
+                    mBuiltInDisplay = (IBinder)mGetPhysicalDisplayToken.invoke(null, ids[0]);
+                } catch (NoSuchMethodException e) {
+                }
+            }
+            if (mBuiltInDisplay == null) {
+                // API 34+
+                cDisplayManagerGlobal = Class.forName("android.hardware.display.DisplayManagerGlobal");
+                Method mGetInstance = cDisplayManagerGlobal.getDeclaredMethod("getInstance");
+                oDisplayManagerGlobal = mGetInstance.invoke(null);
+                Method mGetDisplayIds = cDisplayManagerGlobal.getMethod("getDisplayIds");
+                int[] ids = (int[])mGetDisplayIds.invoke(oDisplayManagerGlobal);
+                displayId = ids[0];
             }
 
             Method mGetDisplayConfigs;
@@ -138,13 +154,20 @@ public abstract class SurfaceHost {
                 // API 30-
                 mGetDisplayConfigs = cSurfaceControl.getDeclaredMethod("getDisplayConfigs", IBinder.class);
                 displayConfigs = (Object[]) mGetDisplayConfigs.invoke(null, mBuiltInDisplay);
-            } else {
-                // API 31+
+            } else if (Build.VERSION.SDK_INT < 34) {
+                // API 31-33
                 Method mGetDynamicDisplayInfo = cSurfaceControl.getDeclaredMethod("getDynamicDisplayInfo", IBinder.class);
-                Object dynamicDisplayInfo = mGetDynamicDisplayInfo.invoke(null, mBuiltInDisplay);
+                Object oDynamicDisplayInfo = mGetDynamicDisplayInfo.invoke(null, mBuiltInDisplay);
                 Class<?> cDynamicDisplayInfo = Class.forName("android.view.SurfaceControl$DynamicDisplayInfo");
                 @SuppressLint("BlockedPrivateApi") Field fSsupportedDisplayModes = cDynamicDisplayInfo.getDeclaredField("supportedDisplayModes");
-                displayConfigs = (Object[]) fSsupportedDisplayModes.get(dynamicDisplayInfo);
+                displayConfigs = (Object[]) fSsupportedDisplayModes.get(oDynamicDisplayInfo);
+            } else {
+                // API 34+
+                Method mGetDisplayInfo = cDisplayManagerGlobal.getDeclaredMethod("getDisplayInfo", int.class);
+                Object oDisplayInfo = mGetDisplayInfo.invoke(oDisplayManagerGlobal, displayId);
+                Class<?> cDisplayInfo = Class.forName("android.view.DisplayInfo");
+                Field fSupportedModes = cDisplayInfo.getDeclaredField("supportedModes");
+                displayConfigs = (Object[]) fSupportedModes.get(oDisplayInfo);
             }
 
             Class<?> cPhysicalDisplayInfo = null;
@@ -160,16 +183,30 @@ public abstract class SurfaceHost {
                 } catch (ClassNotFoundException e) {
                 }
             }
-            // API 31+
-            if (cPhysicalDisplayInfo == null) {
+            // API 31-33
+            if (cPhysicalDisplayInfo == null && cDisplayManagerGlobal == null) {
                 try {
                     cPhysicalDisplayInfo = Class.forName("android.view.SurfaceControl$DisplayMode");
                 } catch (ClassNotFoundException e) {
                 }
+            } else {
+                // API 34+
+                cPhysicalDisplayInfo = Class.forName("android.view.Display$Mode");
             }
 
-            @SuppressLint("BlockedPrivateApi") Field fWidth = cPhysicalDisplayInfo.getDeclaredField("width");
-            @SuppressLint("BlockedPrivateApi") Field fHeight = cPhysicalDisplayInfo.getDeclaredField("height");
+            Field fWidth;
+            Field fHeight;
+
+            try {
+                fWidth = cPhysicalDisplayInfo.getDeclaredField("width");
+                fHeight = cPhysicalDisplayInfo.getDeclaredField("height");
+            } catch (NoSuchFieldException e) {
+                fWidth = cPhysicalDisplayInfo.getDeclaredField("mWidth");
+                fHeight = cPhysicalDisplayInfo.getDeclaredField("mHeight");
+                fWidth.setAccessible(true);
+                fHeight.setAccessible(true);
+            }
+
             if ((displayConfigs == null) || (displayConfigs.length == 0)) {
                 throw new RuntimeException("CFSurface: could not determine screen dimensions");
             }
