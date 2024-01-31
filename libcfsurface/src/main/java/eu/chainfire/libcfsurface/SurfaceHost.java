@@ -216,8 +216,8 @@ public abstract class SurfaceHost {
                 TODO: Replace these hard-coded dimensions with proper logic for determining screen dimensions at boot time.
                       The code commented out above this should help serve as a starting point.
              */
-            mWidth = 1440;
-            mHeight = 3120;
+            mWidth = 1080;
+            mHeight = 2340;
             checkRotation();
 
             // Create SurfaceControl
